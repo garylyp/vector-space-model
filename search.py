@@ -6,6 +6,7 @@ import getopt
 import json
 import heapq
 from nltk.tokenize import *
+from math import log10
 
 stemmer = nltk.stem.PorterStemmer()
 UNIVERSAL = '_universal'
@@ -77,42 +78,44 @@ def parse_query(query):
 def compute_score(tokenized_query, global_dict, postings_fd):
     score = {}
     query_ltc_scores = compute_ltc_scores(tokenized_query, global_dict)
-    i = 0
     for token in tokenized_query:
         # list of postings, with each posting being = [doc_id, tf-lnc]
         processed_postings_list = convert_term_to_postings(token, global_dict, postings_fd)
         # TODO do i have to compute w-t.d. * w-t.q. (using ltc)? W8 slides say we can assume w-t.q. to be 1. See line 89
-        query_score = query_ltc_scores[i]
+        query_score = query_ltc_scores[token]
         for posting in processed_postings_list:     # add lnc of each posting to score_dict
             doc_id = posting[0]
             if doc_id in score.keys():
                 score[doc_id] += posting[1] * query_score  # TODO can i just use *1 instead of *query_score?
             else:
                 score[doc_id] = posting[1] * query_score
-        i += 1
 
     return score
 
 
 def compute_ltc_scores(query_list, global_dict):
-    ltc_scores = []
+    term_ltc_scores = {}
     for query in query_list:
-        # l = 1 + log(1) = 1
-        idf = global_dict[query][1]   # t
-        ltc_scores.append(idf)
+        if query in term_ltc_scores:
+            term_ltc_scores[query] += 1
+        else:
+            term_ltc_scores[query] = 1
+
+    for term, tf in term_ltc_scores.items():
+        l = 1 + log10(tf)
+        idf = global_dict[term][1]   # t
+        term_ltc_scores[term] = l * idf
 
     # Get vector length
     sum_of_squares = 0
-    for lt in ltc_scores:
+    for lt in term_ltc_scores.values():
         sum_of_squares += lt * lt
     vector_length = sum_of_squares ** 0.5
 
-    # Normalize vecotr
-    i = 0
-    for lt in ltc_scores:
-        ltc_scores[i] = lt / vector_length
-        i += 1
-    return ltc_scores
+    # Normalize vector
+    for term, lt in term_ltc_scores.items():
+        term_ltc_scores[term] = lt / vector_length
+    return term_ltc_scores
 
 
 def get_top_docs(score):
