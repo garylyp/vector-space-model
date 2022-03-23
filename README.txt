@@ -11,7 +11,9 @@ Give an overview of your program, describe the important algorithms/steps
 in your program, and discuss your experiments in general.  A few paragraphs 
 are usually sufficient.
 
-INDEXING
+Section 1 details how indexing is down. Section 2 details the searching process.
+
+1. INDEXING
 
 The BSBI algorithm to generate and merge blocks was preserved. To support a search system based on
 a vector space model, the term frequencies and document frequencies of the terms must be calculated
@@ -48,9 +50,30 @@ term_2 : [
 
 Note that skip pointers are not used but still preserved for potential future use.
 
-SEARCH
+2. SEARCH
 
-todo...
+During searching, we first preprocess each query term. If the query term exists in the dictionary, we keep 
+it. Otherwise, we ignore that particular query term by deleting it. Note that since we have already
+preprocessed the posting lists to contain the lnc value for each document, we do not have to do any
+computation on documents in this stage. For each query, we then do the following:
+1) Count the number of times each query term appears in the query. Store the frequency (integer), qtf.
+2) For each unique query term, compute qtf' = 1 + log10(qtf)
+3) Compute the vector length for the query, by taking sqrt(sum_of_squares_of_qtf')
+
+At this point, for each unique query term, do the following:
+  4) Retrieve the inverse document frequency (idf) from the dictionary.
+  5) Compute and store the ltc score. Ltc score = qtf' * idf / vector_length
+  6) Retrieve the relevant postings from dictionary
+  7) For each docID's lnc value in the dictionary, compute and store the score = lnc_score * ltc_score
+  8) If a score already exists for a  given docID, simply add the new score to the old score, and keep
+     the total score.
+
+Once all scores have been computed, for each relevant docID we insert the tuple (score, docID) into a heap.
+We then retrieve the top 10 docIDs from the heap, based on score comparisons (with priority given to larger
+scores). For equal scores, we compare based on docID values (with priority given to smaller docIDs).
+
+If there are any empty queries, we correspondingly return an empty output for those queries.
+
 
 EXPERIMENTS
 
@@ -61,7 +84,13 @@ The types of queries include
   words or the most relevant documents for each of the word
 * Typo, non-existent words ("mexixcan") should return no results as our program does not support fault
   tolerant search system yet
-    
+
+We also experimented with using the shortcut 'Faster Cosine' method of computing query weight, where 
+instead of using the ltc approach, we assign a value of 1 to each term. Score computation would then
+be equal to (doc_lnc * 1). What we observed was that the output list of docIDs would more or less be
+the same, as compared to the lnc.ltc approach. The first 7 or so docIDs would be the same, but with
+different ordering. The other 3 docIDs would be entirely different. We thus felt that this could
+potentially be a much faster way of retrieving the top 10 most relevant docIDs.    
 
 
 == Files included with this submission ==
@@ -90,7 +119,7 @@ assignment, because of the following reason:
 
 We suggest that we should be graded as follows:
 
-<Please fill in>
+As per normal - based on correctness of code, documentation, accuracy and speed.
 
 == References ==
 

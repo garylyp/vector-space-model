@@ -9,7 +9,6 @@ from nltk.tokenize import *
 from math import log10
 
 stemmer = nltk.stem.PorterStemmer()
-UNIVERSAL = '_universal'    # TODO delete
 
 
 def usage():
@@ -79,12 +78,11 @@ def compute_score(tokenized_query, global_dict, postings_fd):
     for token in tokenized_query:
         # list of postings, with each posting being = [doc_id, tf-lnc]
         processed_postings_list = convert_term_to_postings(token, global_dict, postings_fd)
-        # TODO do i have to compute w-t.d. * w-t.q. (using ltc)? W8 slides say we can assume w-t.q. to be 1. See line 89
         query_score = query_ltc_scores[token]
         for posting in processed_postings_list:     # add lnc of each posting to score_dict
             doc_id = posting[0]
             if doc_id in score.keys():
-                score[doc_id] += posting[1] * query_score  # TODO can i just use *1 instead of *query_score?
+                score[doc_id] += posting[1] * query_score
             else:
                 score[doc_id] = posting[1] * query_score
 
@@ -101,13 +99,12 @@ def convert_term_to_postings(term, global_dict, postings_fd):
     postings_string = postings_string.strip()      # strip any newline
     postings_split = postings_string.split()       # list of each posting with associated components
 
-    # split each posting into [doc_id, tf-lnc] or [doc_id, tf-lnc, skip_offset]
+    # split each posting into [doc_id, tf-lnc]
     split_within_postings = []
     for posting in postings_split:
         posting_components = posting.split(',')
         # ignore posting_components[2] as it is just skip_ptr
         split_within_postings.append([int(posting_components[0]), float(posting_components[1])])
-    # print('full process: ', split_within_postings)
     return split_within_postings
 
 
