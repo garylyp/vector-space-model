@@ -9,27 +9,7 @@ from nltk.tokenize import *
 from math import log10
 
 stemmer = nltk.stem.PorterStemmer()
-UNIVERSAL = '_universal'
-
-
-def convert_term_to_postings(term, global_dict, postings_fd):
-    """
-    Retrieve the posting_list of the given term and convert it to an array of postings.
-    """
-    term_id, idf, skip_ptr = global_dict[term]
-    postings_fd.seek(skip_ptr, 0)
-    postings_string = postings_fd.readline()
-    postings_string = postings_string.strip()      # strip any newline
-    postings_split = postings_string.split()       # list of each posting with associated components
-
-    # split each posting into [doc_id, tf-lnc] or [doc_id, tf-lnc, skip_offset]
-    split_within_postings = []
-    for posting in postings_split:
-        posting_components = posting.split(',')
-        # ignore posting_components[2] as it is just skip_ptr
-        split_within_postings.append([int(posting_components[0]), float(posting_components[1])])
-    # print('full process: ', split_within_postings)
-    return split_within_postings
+UNIVERSAL = '_universal'    # TODO delete
 
 
 def usage():
@@ -50,32 +30,50 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     queries_list = queries_fd.read().splitlines()
     result_list = []
     for query in queries_list:
-        tokenized_query = parse_query(query)                                # tokenize and process query
+        tokenized_query = parse_query(query, global_dict)                   # tokenize and process query
         score = compute_score(tokenized_query, global_dict, postings_fd)    # add scores
+        if not score:   # no valid docIDs found, so just append an empty list of docIDs to result
+            result_list.append([])
+            continue
         top_10_docs = get_top_docs(score)
         result_list.append(top_10_docs)
 
     # write results to output file
+    i = 0
+    result_len_minus_one = len(result_list) - 1
     with open(results_file, 'w') as r_file:
         for result in result_list:
             result_str = ''
-            for posting in result:
-                result_str += str(posting) + ' '
+            if result:  # there are valid docIDs found in result
+                for posting in result:
+                    result_str += str(posting) + ' '
+            if i == result_len_minus_one:
+                r_file.write(result_str.strip())    # do not add newline for last result
+                continue
             r_file.write(result_str.strip() + "\n")
+            i += 1
     r_file.close()
 
     return
 
 
-def parse_query(query):
+def parse_query(query, global_dict):
     word_tokenized_query = word_tokenize(query)
     alnum_words = [word for word in word_tokenized_query if word.isalnum()]     # only keep alphanumeric terms
     stemmed_tokens = [stemmer.stem(word) for word in alnum_words]               # stem words
     stemmed_lower_tokens = [token.lower() for token in stemmed_tokens]          # convert tokens to lowercase
-    return stemmed_lower_tokens
+
+    # filter out terms in query that are not in dictionary
+    filtered_tokens = []
+    for token in stemmed_lower_tokens:
+        if token in global_dict:
+            filtered_tokens.append(token)
+    return filtered_tokens
 
 
 def compute_score(tokenized_query, global_dict, postings_fd):
+    if not tokenized_query:     # no tokens available
+        return []
     score = {}
     query_ltc_scores = compute_ltc_scores(tokenized_query, global_dict)
     for token in tokenized_query:
@@ -91,6 +89,26 @@ def compute_score(tokenized_query, global_dict, postings_fd):
                 score[doc_id] = posting[1] * query_score
 
     return score
+
+
+def convert_term_to_postings(term, global_dict, postings_fd):
+    """
+    Retrieve the posting_list of the given term and convert it to an array of postings.
+    """
+    term_id, idf, skip_ptr = global_dict[term]
+    postings_fd.seek(skip_ptr, 0)
+    postings_string = postings_fd.readline()
+    postings_string = postings_string.strip()      # strip any newline
+    postings_split = postings_string.split()       # list of each posting with associated components
+
+    # split each posting into [doc_id, tf-lnc] or [doc_id, tf-lnc, skip_offset]
+    split_within_postings = []
+    for posting in postings_split:
+        posting_components = posting.split(',')
+        # ignore posting_components[2] as it is just skip_ptr
+        split_within_postings.append([int(posting_components[0]), float(posting_components[1])])
+    # print('full process: ', split_within_postings)
+    return split_within_postings
 
 
 def compute_ltc_scores(query_list, global_dict):
@@ -120,7 +138,6 @@ def compute_ltc_scores(query_list, global_dict):
 
 def get_top_docs(score):
     # convert key:value pairs in score to (-value, key) tuples.     Use -value as heapq in python is min heap
-    print(score)
     score_docid_tuples = [(v * -1, k) for k, v in score.items()]
 
     # add all items in dictionary to a heap
