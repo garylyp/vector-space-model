@@ -51,9 +51,11 @@ def build_index(in_dir, out_dict, out_postings):
     # Merge all blocks into one block (postings.txt)
     next_block_id = block_id
     block_files = glob.glob("block*")
+    block_files.sort(key = lambda f : int(os.path.basename(f)[5:]))
     while len(block_files) > 1:
         next_block_id = merge_blocks(block_files, next_block_id)
         block_files = glob.glob("block*")
+        block_files.sort(key = lambda f : int(os.path.basename(f)[5:]))
 
     if os.path.exists(out_postings):
         os.remove(out_postings)
@@ -272,7 +274,8 @@ def merge_blocks_2_way(block_files, start_idx, next_block_id):
             for mp in merged_posting:
                 cur_k = int(mp.split(',')[0])
                 if cur_k <= k:
-                    print("wrong merged!!")
+                    print("Incorrect merge order")
+                    print(f'{term_id} k:{k} curr:{cur_k}')
                 k = cur_k
                     
             posting_list = [str(term_id)] + merged_posting
